@@ -1,14 +1,14 @@
 var WidgetMetadata = {
     id: "zhuijurili",
-    title: "追剧日历(各项榜单、今日推荐)",
+    title: "追剧日历(今/明日播出、周历、各项榜单、今日推荐)",
     modules: [
         {
             id: "todayPlay",
             title: "今日播出",
             functionName: "loadTmdbItems",
-            cacheDuration: 21600,
-            retryCount: 2,
-            timeoutSeconds: 30,
+            cacheDuration: 43200,        // 12小时
+            retryCount: 3,                // 额外重试3次（共4次）
+            timeoutSeconds: 60,
             params: [
                 {
                     name: "sort_by",
@@ -28,9 +28,9 @@ var WidgetMetadata = {
             id: "tomorrowPlay",
             title: "明日播出",
             functionName: "loadTmdbItems",
-            cacheDuration: 21600,
-            retryCount: 2,
-            timeoutSeconds: 30,
+            cacheDuration: 43200,
+            retryCount: 3,
+            timeoutSeconds: 60,
             params: [
                 {
                     name: "sort_by",
@@ -50,9 +50,9 @@ var WidgetMetadata = {
             id: "weekPlay",
             title: "播出周历",
             functionName: "loadWeekTmdbItems",
-            cacheDuration: 21600,
-            retryCount: 2,
-            timeoutSeconds: 30,
+            cacheDuration: 43200,
+            retryCount: 3,
+            timeoutSeconds: 60,
             params: [
                 {
                     name: "sort_by",
@@ -92,9 +92,9 @@ var WidgetMetadata = {
             id: "todayReCommand",
             title: "今日推荐",
             functionName: "loadTmdbItems",
-            cacheDuration: 43200,
-            retryCount: 2,
-            timeoutSeconds: 30,
+            cacheDuration: 86400,        // 24小时
+            retryCount: 3,
+            timeoutSeconds: 60,
             params: [
                 {
                     name: "sort_by",
@@ -109,8 +109,8 @@ var WidgetMetadata = {
             title: "各项榜单",
             functionName: "loadTmdbItems",
             cacheDuration: 86400,
-            retryCount: 2,
-            timeoutSeconds: 30,
+            retryCount: 3,
+            timeoutSeconds: 60,
             params: [
                 {
                     name: "sort_by",
@@ -134,8 +134,8 @@ var WidgetMetadata = {
             title: "地区榜单",
             functionName: "loadTmdbItems",
             cacheDuration: 86400,
-            retryCount: 2,
-            timeoutSeconds: 30,
+            retryCount: 3,
+            timeoutSeconds: 60,
             params: [
                 {
                     name: "sort_by",
@@ -154,7 +154,7 @@ var WidgetMetadata = {
             ]
         }
     ],
-    version: "1.0.4",
+    version: "1.0.5",                    // 版本号递增
     description: "解析追剧日历今/明日播出剧集/番剧/国漫/综艺、周历、各项榜单、今日推荐等【五折码：CHEAP.5;七折码：CHEAP】",
     author: "huangxd",
     site: "https://github.com/huangxd-/ForwardWidgets"
@@ -184,7 +184,7 @@ Object.entries(API_SUFFIXES).forEach(([suffix, values]) => {
     values.forEach(value => suffixMap[value] = suffix);
 });
 
-// 安全 JSON 解析（备用，目前数据已为对象）
+// 安全 JSON 解析
 function safeJson(data) {
     if (typeof data === "string") {
         try {
@@ -199,6 +199,37 @@ function safeJson(data) {
 // 确保返回数组
 function ensureArray(v) {
     return Array.isArray(v) ? v : [];
+}
+
+// ---------- 带指数退避重试的网络请求 ----------
+async function requestWithRetry(url, options, maxRetries = 3) {
+    let lastError = null;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const response = await Widget.http.get(url, options);
+            if (response.ok) {
+                return response;
+            }
+            // 处理 429 限流
+            if (response.status === 429) {
+                const waitTime = Math.pow(2, i) * 2000; // 2s, 4s, 8s
+                console.warn(`[429] 请求被限流，等待 ${waitTime/1000} 秒后重试 (${i+1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                continue;
+            }
+            // 其他 HTTP 错误直接返回（不再重试）
+            console.error(`HTTP错误 ${response.status}: ${url}`);
+            return response;
+        } catch (error) {
+            lastError = error;
+            console.warn(`请求异常 (尝试 ${i+1}/${maxRetries}): ${error.message}`);
+            if (i < maxRetries - 1) {
+                const waitTime = Math.pow(2, i) * 1000; // 1s, 2s, 4s
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+        }
+    }
+    throw lastError || new Error(`请求失败，已达到最大重试次数: ${url}`);
 }
 
 // ---------- TMDB 数据获取 ----------
@@ -220,7 +251,7 @@ async function fetchTmdbData(id, mediaType) {
     }
 }
 
-// 将原始条目（含 tmdb_id）转换为 MediaItem
+// 将原始条目转换为 MediaItem
 async function fetchTmdbItems(scItems) {
     if (!Array.isArray(scItems)) return [];
 
@@ -233,7 +264,6 @@ async function fetchTmdbItems(scItems) {
         const tmdbData = await fetchTmdbData(tmdbId, mediaType);
         if (!tmdbData) return null;
 
-        // 构造完整图片 URL
         const posterUrl = tmdbData.poster_path ? TMDB_IMAGE_BASE + tmdbData.poster_path : "";
         const backdropUrl = tmdbData.backdrop_path ? TMDB_IMAGE_BASE + tmdbData.backdrop_path : "";
 
@@ -246,7 +276,6 @@ async function fetchTmdbItems(scItems) {
             releaseDate: tmdbData.release_date ?? tmdbData.first_air_date,
             rating: tmdbData.vote_average,
             mediaType: mediaType,
-            // 此处未提供 videoUrl/link，条目仅用于展示
         };
     });
 
@@ -256,7 +285,7 @@ async function fetchTmdbItems(scItems) {
         .map(r => r.value);
 }
 
-// ---------- 数据源请求 ----------
+// ---------- 数据源请求（使用 requestWithRetry） ----------
 async function fetchDefaultData(sort_by) {
     const url_prefix = "https://zjrl-1318856176.cos.accelerate.myqcloud.com";
     const suffix = suffixMap[sort_by];
@@ -267,11 +296,11 @@ async function fetchDefaultData(sort_by) {
     const url = `${url_prefix}/${suffix}.json`;
 
     try {
-        const response = await Widget.http.get(url, {
+        const response = await requestWithRetry(url, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             }
-        });
+        }, 3); // 最多重试3次
 
         if (!response.ok) {
             console.error(`请求失败: ${url} 状态码 ${response.status}`);
@@ -309,11 +338,11 @@ async function fetchOtherData(typ, sort_by) {
     const url = `https://gist.githubusercontent.com/huangxd-/5ae61c105b417218b9e5bad7073d2f36/raw/${typ}_${whichDay}.json`;
 
     try {
-        const response = await Widget.http.get(url, {
+        const response = await requestWithRetry(url, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             }
-        });
+        }, 3);
 
         if (!response.ok) {
             console.error(`请求失败: ${url} 状态码 ${response.status}`);
@@ -332,11 +361,11 @@ async function fetchWeekData(weekday, sort_by) {
     const url = `https://gist.githubusercontent.com/huangxd-/5ae61c105b417218b9e5bad7073d2f36/raw/${sort_by}`;
 
     try {
-        const response = await Widget.http.get(url, {
+        const response = await requestWithRetry(url, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             }
-        });
+        }, 3);
 
         if (!response.ok) {
             console.error(`请求失败: ${url} 状态码 ${response.status}`);
