@@ -196,9 +196,9 @@ async function fetchTmdbData(id, mediaType) {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             },
-            // 👇 新增语言参数，使返回中文标题
             params: {
-                language: 'zh-CN'
+                language: 'zh-CN',
+                append_to_response: 'credits'  // 可选，为以后扩展预留
             }
         });
         if (!tmdbResult) {
@@ -212,7 +212,7 @@ async function fetchTmdbData(id, mediaType) {
     }
 }
 
-// 将原始条目（含 tmdb_id）转换为 MediaItem
+// 将原始条目（含 tmdb_id）转换为 MediaItem（丰富信息版）
 async function fetchTmdbItems(scItems) {
     if (!Array.isArray(scItems)) return [];
 
@@ -229,16 +229,36 @@ async function fetchTmdbItems(scItems) {
         const posterUrl = tmdbData.poster_path ? TMDB_IMAGE_BASE + tmdbData.poster_path : "";
         const backdropUrl = tmdbData.backdrop_path ? TMDB_IMAGE_BASE + tmdbData.backdrop_path : "";
 
+        // 提取日期和评分
+        const date = tmdbData.release_date || tmdbData.first_air_date || "";
+        const year = date ? date.split('-')[0] : "";
+        const rating = tmdbData.vote_average ? tmdbData.vote_average.toFixed(1) : "0.0";
+        
+        // 提取流派（中文）
+        let genreText = "";
+        if (tmdbData.genres && Array.isArray(tmdbData.genres)) {
+            genreText = tmdbData.genres.slice(0, 3).map(g => g.name).join(' / ');
+        }
+        if (!genreText) {
+            genreText = mediaType === 'tv' ? '剧集' : '电影';
+        }
+
+        // 构建 description：日期 · 评分 + 换行 + 简介
+        const description = `${date} · ${rating}\n${tmdbData.overview || '暂无简介'}`;
+
+        // 构建 MediaItem，参考 buildItem 风格
         return {
             id: String(tmdbData.id),
             title: tmdbData.title ?? tmdbData.name ?? "无标题",
-            description: tmdbData.overview || "",
+            description: description,
             posterUrl: posterUrl,
             backdropUrl: backdropUrl,
-            releaseDate: tmdbData.release_date ?? tmdbData.first_air_date,
+            releaseDate: date,
             rating: tmdbData.vote_average,
             mediaType: mediaType,
-            // 此处未提供 videoUrl/link，条目仅用于展示
+            genreTitle: genreText,           // 卡片上显示流派
+            subTitle: `评分 ${rating}`,       // 备用字段
+            tmdbId: tmdbData.id,              // 保留以备将来使用
         };
     });
 
