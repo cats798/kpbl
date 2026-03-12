@@ -145,7 +145,7 @@ var WidgetMetadata = {
     version: "1.0.4",
     description: "解析追剧日历今/明日播出剧集/番剧/国漫/综艺、周历、各项榜单、今日推荐等",
     author: "cats798",
-    site: "https://github.com/huangxd-/ForwardWidgets"
+    site: "https://github.com/cats798/kpbl"
 };
 
 // ---------- 常量与工具函数 ----------
