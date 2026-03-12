@@ -1,4 +1,4 @@
-cats798var WidgetMetadata = {
+var WidgetMetadata = {
     id: "zhuijurili",
     title: "追剧日历(各项榜单、今日推荐)",
     modules: [
@@ -143,9 +143,9 @@ cats798var WidgetMetadata = {
         }
     ],
     version: "1.0.4",
-    description: "解析追剧日历今/明日播出剧集/番剧/国漫/综艺、周历、各项榜单、今日推荐等【五折码：CHEAP.5;七折码：CHEAP】",
+    description: "解析追剧日历今/明日播出剧集/番剧/国漫/综艺、周历、各项榜单、今日推荐等",
     author: "cats798",
-    site: "https://github.com/cats798-/kpbl"
+    site: "https://github.com/huangxd-/ForwardWidgets"
 };
 
 // ---------- 常量与工具函数 ----------
@@ -294,7 +294,7 @@ async function fetchDefaultData(sort_by) {
 
 async function fetchOtherData(typ, sort_by) {
     const whichDay = sort_by.includes("今天") ? "today" : "tomorrow";
-    const url = `https://gist.githubusercontent.com/ctas798-/5ae61c105b417218b9e5bad7073d2f36/raw/${typ}_${whichDay}.json`;
+    const url = `https://gist.githubusercontent.com/huangxd-/5ae61c105b417218b9e5bad7073d2f36/raw/${typ}_${whichDay}.json`;
 
     try {
         const response = await Widget.http.get(url, {
@@ -317,7 +317,7 @@ async function fetchOtherData(typ, sort_by) {
 }
 
 async function fetchWeekData(weekday, sort_by) {
-    const url = `https://gist.githubusercontent.com/cats798-/5ae61c105b417218b9e5bad7073d2f36/raw/${sort_by}`;
+    const url = `https://gist.githubusercontent.com/huangxd-/5ae61c105b417218b9e5bad7073d2f36/raw/${sort_by}`;
 
     try {
         const response = await Widget.http.get(url, {
