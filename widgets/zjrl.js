@@ -1,12 +1,14 @@
 var WidgetMetadata = {
     id: "zhuijurili",
-    title: "追剧日历",
+    title: "追剧日历(各项榜单、今日推荐)",
     modules: [
         {
             id: "todayPlay",
             title: "今日播出",
             functionName: "loadTmdbItems",
             cacheDuration: 21600,
+            retryCount: 2,
+            timeoutSeconds: 30,
             params: [
                 {
                     name: "sort_by",
@@ -27,6 +29,8 @@ var WidgetMetadata = {
             title: "明日播出",
             functionName: "loadTmdbItems",
             cacheDuration: 21600,
+            retryCount: 2,
+            timeoutSeconds: 30,
             params: [
                 {
                     name: "sort_by",
@@ -47,6 +51,8 @@ var WidgetMetadata = {
             title: "播出周历",
             functionName: "loadWeekTmdbItems",
             cacheDuration: 21600,
+            retryCount: 2,
+            timeoutSeconds: 30,
             params: [
                 {
                     name: "sort_by",
@@ -87,6 +93,8 @@ var WidgetMetadata = {
             title: "今日推荐",
             functionName: "loadTmdbItems",
             cacheDuration: 43200,
+            retryCount: 2,
+            timeoutSeconds: 30,
             params: [
                 {
                     name: "sort_by",
@@ -101,6 +109,8 @@ var WidgetMetadata = {
             title: "各项榜单",
             functionName: "loadTmdbItems",
             cacheDuration: 86400,
+            retryCount: 2,
+            timeoutSeconds: 30,
             params: [
                 {
                     name: "sort_by",
@@ -124,6 +134,8 @@ var WidgetMetadata = {
             title: "地区榜单",
             functionName: "loadTmdbItems",
             cacheDuration: 86400,
+            retryCount: 2,
+            timeoutSeconds: 30,
             params: [
                 {
                     name: "sort_by",
