@@ -1,6 +1,6 @@
 var WidgetMetadata = {
     id: "zhuijurili",
-    title: "追剧日历(各项榜单、今日推荐)",
+    title: "追剧日历(今/明日播出、周历、各项榜单、今日推荐)",
     modules: [
         {
             id: "todayPlay",
@@ -143,8 +143,8 @@ var WidgetMetadata = {
         }
     ],
     version: "1.0.4",
-    description: "解析追剧日历今/明日播出剧集/番剧/国漫/综艺、周历、各项榜单、今日推荐等",
-    author: "cats798",
+    description: "解析追剧日历今/明日播出剧集/番剧/国漫/综艺、周历、各项榜单、今日推荐等【五折码：CHEAP.5;七折码：CHEAP】",
+    author: "huangxd",
     site: "https://github.com/huangxd-/ForwardWidgets"
 };
 
