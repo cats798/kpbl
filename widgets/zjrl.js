@@ -196,9 +196,6 @@ async function fetchTmdbData(id, mediaType) {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             },
-            // 👇 新增语言参数，使返回中文标题
-            params: {
-                language: 'zh-CN'
             }
         });
         if (!tmdbResult) {
