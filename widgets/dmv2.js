@@ -1,3 +1,158 @@
+// Forward 兼容性适配
+// ============================================
+
+// 1. 存储接口适配
+const ForwardStorage = {
+  _storage: {},
+  
+  get(key) {
+    try {
+      const value = this._storage[key];
+      if (value === undefined || value === null) {
+        return null;
+      }
+      // 尝试解析 JSON
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value);
+        } catch (e) {
+          return value;
+        }
+      }
+      return value;
+    } catch (e) {
+      console.error('ForwardStorage.get error:', e);
+      return null;
+    }
+  },
+  
+  set(key, value) {
+    try {
+      if (typeof value === 'object') {
+        this._storage[key] = JSON.stringify(value);
+      } else {
+        this._storage[key] = value;
+      }
+      return true;
+    } catch (e) {
+      console.error('ForwardStorage.set error:', e);
+      return false;
+    }
+  },
+  
+  remove(key) {
+    try {
+      delete this._storage[key];
+      return true;
+    } catch (e) {
+      console.error('ForwardStorage.remove error:', e);
+      return false;
+    }
+  },
+  
+  save() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('dmv2_cache', JSON.stringify(this._storage));
+      }
+    } catch (e) {
+      console.error('ForwardStorage.save error:', e);
+    }
+  },
+  
+  load() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const data = localStorage.getItem('dmv2_cache');
+        if (data) {
+          this._storage = JSON.parse(data);
+        }
+      }
+    } catch (e) {
+      console.error('ForwardStorage.load error:', e);
+    }
+  }
+};
+
+// 初始化存储
+ForwardStorage.load();
+
+// 2. HTTP 接口适配（使用 fetch）
+const ForwardHttp = {
+  async get(url, options = {}) {
+    const { headers = {}, timeout = 30000, retries = 3 } = options;
+    
+    for (let i = 0; i < retries; i++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers,
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        const data = await response.text();
+        
+        return {
+          data: data,
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        };
+      } catch (e) {
+        if (i === retries - 1) throw e;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  },
+  
+  async post(url, options = {}) {
+    const { headers = {}, body, timeout = 30000, retries = 3 } = options;
+    
+    for (let i = 0; i < retries; i++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: typeof body === 'string' ? body : JSON.stringify(body),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        const data = await response.text();
+        
+        return {
+          data: data,
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        };
+      } catch (e) {
+        if (i === retries - 1) throw e;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  }
+};
+
+// 3. 全局 Widget 对象
+const Widget = {
+  storage: ForwardStorage,
+  http: ForwardHttp
+};
+
+// ============================================
+// 原始文件内容开始
+// ============================================
+
 class URL {
   constructor(url, base) {
     if (base) {
@@ -1549,7 +1704,7 @@ async function httpPost(url, body, options = {}) {
 }
 async function getPageTitle(url) {
   try {
-    const response = await Widget.http.get(url, {
+    const response = await ForwardHttp.get(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15"
       }
@@ -4167,7 +4322,7 @@ async function tmdbApiGet(url, options = {}) {
   const tartgetUrl = `${tmdbApi}${url}`;
   const nextUrl = globals.makeProxyUrl(tartgetUrl);
   try {
-    const response = await Widget.http.get(nextUrl, {
+    const response = await ForwardHttp.get(nextUrl, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -7228,7 +7383,7 @@ var Kan360Source = class extends BaseSource {
     try {
       let links = [];
       for (let j = 0; j <= 10; j++) {
-        const response = await Widget.http.get(
+        const response = await ForwardHttp.get(
           `https://api.so.360kan.com/episodeszongyi?entid=${entId}&site=${site}&y=${year}&count=20&offset=${j * 20}`,
           {
             headers: {
@@ -7278,7 +7433,7 @@ var Kan360Source = class extends BaseSource {
   async getNumber(cat, id, site) {
     try {
       const url = `https://api.web.360kan.com/v1/detail?cat=${cat}&id=${id}&site=${site}`;
-      const res = await Widget.http.get(url, {
+      const res = await ForwardHttp.get(url, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -7297,7 +7452,7 @@ var Kan360Source = class extends BaseSource {
   async get360Detail(cat, id, site, start2, end2) {
     try {
       const url = `https://api.web.360kan.com/v1/detail?cat=${cat}&id=${id}&start=${start2}&end=${end2}&site=${site}`;
-      const res = await Widget.http.get(url, {
+      const res = await ForwardHttp.get(url, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -7314,7 +7469,7 @@ var Kan360Source = class extends BaseSource {
     try {
       const sParam = JSON.stringify([{ cat_id: String(cat), ent_id: String(entId), site }]);
       const url = `https://api.so.360kan.com/episodesv2?v_ap=1&s=${encodeURIComponent(sParam)}`;
-      const response = await Widget.http.get(url, {
+      const response = await ForwardHttp.get(url, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -7370,7 +7525,7 @@ var Kan360Source = class extends BaseSource {
   }
   async search(keyword) {
     try {
-      const response = await Widget.http.get(
+      const response = await ForwardHttp.get(
         `https://api.so.360kan.com/index?force_v=1&kw=${encodeURIComponent(keyword)}&from=&pageno=1&v_ap=1&tab=all`,
         {
           headers: {
@@ -7525,7 +7680,7 @@ var VodSource = class extends BaseSource {
     try {
       const safeTitle = sanitizeSearchKeyword(title);
       const encodedTitle = encodeURIComponent(safeTitle);
-      const response = await Widget.http.get(
+      const response = await ForwardHttp.get(
         `${server}/api.php/provide/vod/?ac=detail&wd=${encodedTitle}&pg=1`,
         {
           headers: {
@@ -7691,7 +7846,7 @@ async function doubanApiGet(url) {
     headers["Cookie"] = globals.doubanCookie;
   }
   try {
-    const response = await Widget.http.get(`${doubanApi}${url}`, {
+    const response = await ForwardHttp.get(`${doubanApi}${url}`, {
       method: "GET",
       headers
     });
@@ -7709,7 +7864,7 @@ async function doubanApiGet(url) {
 async function doubanApiPost(url, data = {}) {
   const doubanApi = "https://api.douban.com/v2";
   try {
-    const response = await Widget.http.post(
+    const response = await ForwardHttp.post(
       `${doubanApi}${url}`,
       JSON.stringify({ ...data, apikey: "0ac44ae016490db2204ce0a042db2916" }),
       {
@@ -7754,7 +7909,7 @@ async function getDoubanInfoByImdbId(imdbId) {
 async function imdbApiGet(url) {
   const imdbApi = "https://api.imdbapi.dev";
   try {
-    const response = await Widget.http.get(`${imdbApi}${url}`, {
+    const response = await ForwardHttp.get(`${imdbApi}${url}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -8227,7 +8382,7 @@ var RenrenSource = class extends BaseSource {
       const queryString = Object.entries(queryParams).map(([k, v]) => `${k}=${encodeURIComponent(v === null || v === void 0 ? "" : String(v))}`).join("&");
       const headers = this.generateTvHeaders(timestamp, sign);
       const url = `https://${this.API_CONFIG.TV_HOST}${path2}?${queryString}`;
-      const resp = await Widget.http.get(url, {
+      const resp = await ForwardHttp.get(url, {
         headers,
         retries: 1
       });
@@ -8275,7 +8430,7 @@ var RenrenSource = class extends BaseSource {
       const sign = generateSign(path2, timestamp, queryParams, this.API_CONFIG.SECRET_KEY);
       const queryString = Object.entries(queryParams).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
       const headers = this.generateTvHeaders(timestamp, sign);
-      const resp = await Widget.http.get(`https://${this.API_CONFIG.TV_HOST}${path2}?${queryString}`, {
+      const resp = await ForwardHttp.get(`https://${this.API_CONFIG.TV_HOST}${path2}?${queryString}`, {
         headers,
         retries: 1
       });
@@ -8322,7 +8477,7 @@ var RenrenSource = class extends BaseSource {
       const sign = generateSign(path2, timestamp, queryParams, this.API_CONFIG.SECRET_KEY);
       const headers = this.generateTvHeaders(timestamp, sign);
       const url = `https://${this.API_CONFIG.TV_DANMU_HOST}${path2}`;
-      const resp = await Widget.http.get(url, {
+      const resp = await ForwardHttp.get(url, {
         headers,
         retries: 1
       });
@@ -8672,7 +8827,7 @@ ${path2}?${sortedQuery}`;
   }
   async renrenHttpGet(url, { params = {}, headers = {} } = {}) {
     const u = updateQueryString(url, params);
-    const resp = await Widget.http.get(u, {
+    const resp = await ForwardHttp.get(u, {
       headers,
       retries: 1
     });
@@ -8684,7 +8839,7 @@ ${path2}?${sortedQuery}`;
   async renrenRequest(method, url, params = {}) {
     const deviceId = this.generateDeviceId();
     const headers = this.buildSignedHeaders({ method, url, params, deviceId });
-    const resp = await Widget.http.get(url + "?" + sortedQueryString(params), {
+    const resp = await ForwardHttp.get(url + "?" + sortedQueryString(params), {
       headers,
       retries: 1
     });
@@ -8755,7 +8910,7 @@ var HanjutvSource = class extends BaseSource {
    */
   async tvGet(path2, options = {}) {
     const headerInfo = await this.buildTvHeaders();
-    const resp = await Widget.http.get(`${this.tvHost}${path2}`, {
+    const resp = await ForwardHttp.get(`${this.tvHost}${path2}`, {
       headers: headerInfo.headers,
       timeout: 1e4,
       retries: 1,
@@ -8949,7 +9104,7 @@ var HanjutvSource = class extends BaseSource {
   }
   async warmupMobileIdentity(headers) {
     try {
-      await Widget.http.get(`${this.appHost}/api/common/configs`, { headers, timeout: 8e3, retries: 0 });
+      await ForwardHttp.get(`${this.appHost}/api/common/configs`, { headers, timeout: 8e3, retries: 0 });
     } catch (_) {
     }
   }
@@ -8969,7 +9124,7 @@ var HanjutvSource = class extends BaseSource {
     await this.ensureMobileIdentityWarmed();
     const { uid, headers } = await this.buildMobileHeaders();
     const q = encodeURIComponent(keyword);
-    const resp = await Widget.http.get(`https://hxqapi.hiyun.tv/api/search/s5?k=${q}&srefer=search_input&type=0&page=1`, {
+    const resp = await ForwardHttp.get(`https://hxqapi.hiyun.tv/api/search/s5?k=${q}&srefer=search_input&type=0&page=1`, {
       headers,
       timeout: 1e4,
       retries: 1
@@ -8979,7 +9134,7 @@ var HanjutvSource = class extends BaseSource {
   async searchWithTvApi(keyword) {
     const q = encodeURIComponent(keyword);
     const headerInfo = await this.buildTvHeaders();
-    const resp = await Widget.http.get(`https://api.xiawen.tv/api/v1/aggregate/search?key=${q}&scope=101&page=1`, {
+    const resp = await ForwardHttp.get(`https://api.xiawen.tv/api/v1/aggregate/search?key=${q}&scope=101&page=1`, {
       headers: headerInfo.headers,
       timeout: 1e4,
       retries: 1
@@ -9031,7 +9186,7 @@ var HanjutvSource = class extends BaseSource {
   }
   async getHxqDetail(id) {
     return this.getSeriesDetail(id, async (sid) => {
-      const r = await Widget.http.get(`${this.appHost}/api/series/detail?sid=${sid}`, {
+      const r = await ForwardHttp.get(`${this.appHost}/api/series/detail?sid=${sid}`, {
         headers: this.getAppHeaders(),
         timeout: 1e4,
         retries: 1
@@ -9051,7 +9206,7 @@ var HanjutvSource = class extends BaseSource {
       if (!sid) return [];
       const attempts = [
         async () => {
-          const r = await Widget.http.get(`${this.appHost}/api/series/detail?sid=${sid}`, {
+          const r = await ForwardHttp.get(`${this.appHost}/api/series/detail?sid=${sid}`, {
             headers: this.getAppHeaders(),
             timeout: 1e4,
             retries: 1
@@ -9059,7 +9214,7 @@ var HanjutvSource = class extends BaseSource {
           return this.normalizeHxqEpisodes(Array.isArray(r?.data?.playItems) ? r.data.playItems : []);
         },
         async () => {
-          const r = await Widget.http.get(`${this.appHost}/api/series2/episodes?sid=${sid}&refer=${encodeURIComponent(this.defaultRefer)}`, {
+          const r = await ForwardHttp.get(`${this.appHost}/api/series2/episodes?sid=${sid}&refer=${encodeURIComponent(this.defaultRefer)}`, {
             headers: this.getAppHeaders(),
             timeout: 1e4,
             retries: 1
@@ -9068,7 +9223,7 @@ var HanjutvSource = class extends BaseSource {
           return this.normalizeHxqEpisodes(data?.programs || data?.episodes || data?.qxkPrograms || []);
         },
         async () => {
-          const r = await Widget.http.get(`${this.appHost}/api/series/programs_v2?sid=${sid}`, {
+          const r = await ForwardHttp.get(`${this.appHost}/api/series/programs_v2?sid=${sid}`, {
             headers: this.getAppHeaders(),
             timeout: 1e4,
             retries: 1
@@ -9272,7 +9427,7 @@ var HanjutvSource = class extends BaseSource {
           let pageCount = 0;
           const maxPages = 240;
           while (fromAxis < MAX_AXIS && pageCount < maxPages) {
-            const resp = await Widget.http.get(`${danmuHost}/api/danmu/playItem/list?pid=${episodeId}&prevId=${prevId}&fromAxis=${fromAxis}&toAxis=${toAxis}&offset=0`, {
+            const resp = await ForwardHttp.get(`${danmuHost}/api/danmu/playItem/list?pid=${episodeId}&prevId=${prevId}&fromAxis=${fromAxis}&toAxis=${toAxis}&offset=0`, {
               headers,
               timeout: 1e4,
               retries: 1
@@ -9390,7 +9545,7 @@ var BahamutSource = class extends BaseSource {
         try {
           const targetUrl = `https://api.gamer.com.tw/mobile_app/anime/v1/search.php?kw=${encodedKeyword}`;
           const url = globals.makeProxyUrl(targetUrl);
-          const originalResp = await Widget.http.get(url, {
+          const originalResp = await ForwardHttp.get(url, {
             headers: {
               "Content-Type": "application/json",
               "User-Agent": "Anime/2.29.2 (7N5749MM3F.tw.com.gamer.anime; build:972; iOS 26.0.0) Alamofire/5.6.4"
@@ -9435,7 +9590,7 @@ var BahamutSource = class extends BaseSource {
           const encodedTmdbTitle = encodeURIComponent(tmdbTitle);
           const targetUrl = `https://api.gamer.com.tw/mobile_app/anime/v1/search.php?kw=${encodedTmdbTitle}`;
           const tmdbSearchUrl = globals.makeProxyUrl(targetUrl);
-          const tmdbResp = await Widget.http.get(tmdbSearchUrl, {
+          const tmdbResp = await ForwardHttp.get(tmdbSearchUrl, {
             headers: {
               "Content-Type": "application/json",
               "User-Agent": "Anime/2.29.2 (7N5749MM3F.tw.com.gamer.anime; build:972; iOS 26.0.0) Alamofire/5.6.4"
@@ -9514,7 +9669,7 @@ var BahamutSource = class extends BaseSource {
     try {
       const targetUrl = `https://api.gamer.com.tw/anime/v1/video.php?videoSn=${id}`;
       const url = globals.makeProxyUrl(targetUrl);
-      const resp = await Widget.http.get(url, {
+      const resp = await ForwardHttp.get(url, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Anime/2.29.2 (7N5749MM3F.tw.com.gamer.anime; build:972; iOS 26.0.0) Alamofire/5.6.4"
@@ -9662,7 +9817,7 @@ var BahamutSource = class extends BaseSource {
     try {
       const targetUrl = `https://api.gamer.com.tw/anime/v1/danmu.php?geo=TW%2CHK&videoSn=${id}`;
       const url = globals.makeProxyUrl(targetUrl);
-      const resp = await Widget.http.get(url, {
+      const resp = await ForwardHttp.get(url, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Anime/2.29.2 (7N5749MM3F.tw.com.gamer.anime; build:972; iOS 26.0.0) Alamofire/5.6.4"
@@ -9841,7 +9996,7 @@ var TencentSource = class extends BaseSource {
         "Uk": "8e91af25d3af99d0f0640327e7307666",
         "Cookie": "tvfe_boss_uuid=ee8f05103d59226f; pgv_pvid=3155633511; video_platform=2; ptag=v_qq_com; main_login=qq"
       };
-      const response = await Widget.http.post(searchUrl, JSON.stringify(payload), { headers });
+      const response = await ForwardHttp.post(searchUrl, JSON.stringify(payload), { headers });
       if (!response || !response.data) {
         log("info", "[Tencent] \u641C\u7D22\u54CD\u5E94\u4E3A\u7A7A");
         return [];
@@ -9927,7 +10082,7 @@ var TencentSource = class extends BaseSource {
         "Accept": "application/json",
         "Accept-Language": "zh-CN,zh;q=0.9"
       };
-      const response = await Widget.http.post(episodesUrl, JSON.stringify(payload), { headers });
+      const response = await ForwardHttp.post(episodesUrl, JSON.stringify(payload), { headers });
       if (!response || !response.data) {
         log("info", "[Tencent] \u5206\u96C6\u54CD\u5E94\u4E3A\u7A7A");
         return [];
@@ -9998,7 +10153,7 @@ var TencentSource = class extends BaseSource {
               detail_page_type: "1"
             }
           };
-          const tabResponse = await Widget.http.post(episodesUrl, JSON.stringify(tabPayload), { headers });
+          const tabResponse = await ForwardHttp.post(episodesUrl, JSON.stringify(tabPayload), { headers });
           if (!tabResponse || !tabResponse.data) continue;
           const tabData = typeof tabResponse.data === "string" ? JSON.parse(tabResponse.data) : tabResponse.data;
           if (tabData.ret !== 0 || !tabData.data) continue;
@@ -10104,7 +10259,7 @@ var TencentSource = class extends BaseSource {
     log("info", `vid: ${vid2}`);
     let res;
     try {
-      res = await Widget.http.get(id, {
+      res = await ForwardHttp.get(id, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -10163,7 +10318,7 @@ var TencentSource = class extends BaseSource {
     log("info", `\u83B7\u53D6\u5F39\u5E55\u5206\u6BB5\u5217\u8868 - vid: ${vid2}`);
     let res;
     try {
-      res = await Widget.http.get(api_danmaku_base + vid2, {
+      res = await ForwardHttp.get(api_danmaku_base + vid2, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -10206,7 +10361,7 @@ var TencentSource = class extends BaseSource {
   }
   async getEpisodeSegmentDanmu(segment) {
     try {
-      const response = await Widget.http.get(segment.url, {
+      const response = await ForwardHttp.get(segment.url, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -10293,7 +10448,7 @@ var _IqiyiSource = class _IqiyiSource extends BaseSource {
       };
       const queryString = buildQueryString(params);
       const url = `https://mesh.if.iqiyi.com/portal/lw/search/homePageV3?${queryString}`;
-      const response = await Widget.http.get(url, {
+      const response = await ForwardHttp.get(url, {
         headers: {
           "accept": "*/*",
           "origin": "https://www.iqiyi.com",
@@ -10504,7 +10659,7 @@ var _IqiyiSource = class _IqiyiSource extends BaseSource {
       params.sign = this._createSign(params);
       const queryString = buildQueryString(params);
       const url = `https://www.iqiyi.com/prelw/tvg/v2/lw/base_info?${queryString}`;
-      const response = await Widget.http.get(url, {
+      const response = await ForwardHttp.get(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Referer": "https://www.iqiyi.com/"
@@ -10577,7 +10732,7 @@ var _IqiyiSource = class _IqiyiSource extends BaseSource {
             if (typeof videosData === "string") {
               log("info", `[iQiyi] \u53D1\u73B0\u5206\u5B63URL\uFF0C\u6B63\u5728\u83B7\u53D6: ${videosData}`);
               try {
-                const seasonResponse = await Widget.http.get(videosData);
+                const seasonResponse = await ForwardHttp.get(videosData);
                 videosData = typeof seasonResponse.data === "string" ? JSON.parse(seasonResponse.data) : seasonResponse.data;
               } catch (error) {
                 log("error", `[iQiyi] \u83B7\u53D6\u5206\u5B63\u6570\u636E\u5931\u8D25: ${error.message}`);
@@ -10658,7 +10813,7 @@ var _IqiyiSource = class _IqiyiSource extends BaseSource {
       const queryString = buildQueryString(params);
       const url = `https://mesh.if.iqiyi.com/tvg/v2/lw/base_info?${queryString}`;
       log("debug", `[iQiyi] \u8BF7\u6C42\u7535\u5F71\u8BE6\u60C5: ${url}`);
-      const response = await Widget.http.get(url, {
+      const response = await ForwardHttp.get(url, {
         headers: {
           "accept": "*/*",
           "origin": "https://www.iqiyi.com",
@@ -10821,7 +10976,7 @@ var _IqiyiSource = class _IqiyiSource extends BaseSource {
     log("info", "\u5F00\u59CB\u4ECE\u672C\u5730\u8BF7\u6C42\u7231\u5947\u827A\u5F39\u5E55...", id);
     let res;
     try {
-      res = await Widget.http.get(id, {
+      res = await ForwardHttp.get(id, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -10875,7 +11030,7 @@ var _IqiyiSource = class _IqiyiSource extends BaseSource {
       tvid = idMatch[1];
       log("info", `tvid: ${tvid}`);
       const decodeUrl = `${api_decode_base}${tvid}?platformId=3&modeCode=intl&langCode=sg`;
-      let res = await Widget.http.get(decodeUrl, {
+      let res = await ForwardHttp.get(decodeUrl, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -10894,7 +11049,7 @@ var _IqiyiSource = class _IqiyiSource extends BaseSource {
     let duration, albumid, categoryid;
     try {
       const videoInfoUrl = `${api_video_info}${tvid}`;
-      const res = await Widget.http.get(videoInfoUrl, {
+      const res = await ForwardHttp.get(videoInfoUrl, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -10949,7 +11104,7 @@ var _IqiyiSource = class _IqiyiSource extends BaseSource {
         const res = xml.match(reg)?.map((x) => x.substring(tag.length + 2, x.length - tag.length - 3));
         return res || [];
       };
-      const response = await Widget.http.get(segment.url, {
+      const response = await ForwardHttp.get(segment.url, {
         headers: {
           "Accpet-Encoding": "gzip",
           "Content-Type": "application/xml",
@@ -11060,7 +11215,7 @@ var MangoSource = class extends BaseSource {
       log("info", `[Mango] \u5F00\u59CB\u641C\u7D22: ${keyword}`);
       const encodedKeyword = encodeURIComponent(keyword);
       const searchUrl = `https://mobileso.bz.mgtv.com/msite/search/v2?q=${encodedKeyword}&pc=30&pn=1&sort=-99&ty=0&du=0&pt=0&corr=1&abroad=0&_support=10000000000000000`;
-      const response = await Widget.http.get(searchUrl, {
+      const response = await ForwardHttp.get(searchUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Accept": "application/json",
@@ -11122,7 +11277,7 @@ var MangoSource = class extends BaseSource {
       let totalPages = 1;
       while (pageIndex < totalPages) {
         const url = `https://pcweb.api.mgtv.com/variety/showlist?allowedRC=1&collection_id=${id}&month=${month}&page=1&_support=10000000`;
-        const response = await Widget.http.get(url, {
+        const response = await ForwardHttp.get(url, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://www.mgtv.com/"
@@ -11179,7 +11334,7 @@ var MangoSource = class extends BaseSource {
     try {
       log("info", `[Mango] \u83B7\u53D6\u7535\u5F71\u6B63\u7247: collection_id=${mediaId}`);
       const url = `https://pcweb.api.mgtv.com/variety/showlist?allowedRC=1&collection_id=${mediaId}&month=&page=1&_support=10000000`;
-      const response = await Widget.http.get(url, {
+      const response = await ForwardHttp.get(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Referer": "https://www.mgtv.com/"
@@ -11435,7 +11590,7 @@ var MangoSource = class extends BaseSource {
     let res;
     try {
       const videoInfoUrl = `${api_video_info}?cid=${cid}&vid=${vid2}`;
-      res = await Widget.http.get(videoInfoUrl, {
+      res = await ForwardHttp.get(videoInfoUrl, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -11459,7 +11614,7 @@ var MangoSource = class extends BaseSource {
     let useNewApi = true;
     try {
       const ctlBarrageUrl = `${api_ctl_barrage}?version=8.1.39&abroad=0&uuid=&os=10.15.7&platform=0&mac=&vid=${vid2}&pid=&cid=${cid}&ticket=`;
-      const res2 = await Widget.http.get(ctlBarrageUrl, {
+      const res2 = await ForwardHttp.get(ctlBarrageUrl, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -11515,7 +11670,7 @@ var MangoSource = class extends BaseSource {
   }
   async getEpisodeSegmentDanmu(segment) {
     try {
-      const response = await Widget.http.get(segment.url, {
+      const response = await ForwardHttp.get(segment.url, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -11616,7 +11771,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
     }
     log("info", "[Bilibili] WBI mixin key \u5DF2\u8FC7\u671F\u6216\u4E0D\u5B58\u5728\uFF0C\u6B63\u5728\u83B7\u53D6\u65B0\u7684...");
     try {
-      const navResp = await Widget.http.get("https://api.bilibili.com/x/web-interface/nav", {
+      const navResp = await ForwardHttp.get("https://api.bilibili.com/x/web-interface/nav", {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Referer": "https://www.bilibili.com/",
@@ -11670,7 +11825,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
       const signedParams = this._getWbiSignedParams(searchParams, mixinKey);
       const queryString = Object.keys(signedParams).map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(signedParams[key])}`).join("&");
       const url = `https://api.bilibili.com/x/web-interface/wbi/search/type?${queryString}`;
-      const response = await Widget.http.get(url, {
+      const response = await ForwardHttp.get(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Referer": "https://www.bilibili.com/",
@@ -11853,7 +12008,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
    */
   async _resolveMediaInfo(mediaId) {
     try {
-      const res = await Widget.http.get(`https://api.bilibili.com/pgc/review/user?media_id=${mediaId}`);
+      const res = await ForwardHttp.get(`https://api.bilibili.com/pgc/review/user?media_id=${mediaId}`);
       const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
       if (data.code === 0 && data.result && data.result.media) {
         const media = data.result.media;
@@ -11878,7 +12033,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
     ];
     for (const url of apis) {
       try {
-        const response = await Widget.http.get(url, {
+        const response = await ForwardHttp.get(url, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://www.bilibili.com/",
@@ -11925,7 +12080,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
   async _getUgcEpisodes(bvid) {
     try {
       const url = `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`;
-      const response = await Widget.http.get(url, {
+      const response = await ForwardHttp.get(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Referer": "https://www.bilibili.com/",
@@ -12109,7 +12264,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
           aid = path2[2].substring(2);
           videoInfoUrl = `${api_video_info}?aid=${path2[2].substring(2)}`;
         }
-        const res = await Widget.http.get(videoInfoUrl, {
+        const res = await ForwardHttp.get(videoInfoUrl, {
           headers: {
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -12138,7 +12293,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
         });
         let success = false;
         if (!isOversea) {
-          const res = await Widget.http.get(`${api_epid_cid}?ep_id=${epid}`, {
+          const res = await ForwardHttp.get(`${api_epid_cid}?ep_id=${epid}`, {
             headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0" }
           });
           const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
@@ -12155,7 +12310,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
         if ((!success || isOversea) && seasonId && this._hasBilibiliProxy()) {
           try {
             const proxyUrl = this._makeProxyUrl(`https://api.bilibili.com/pgc/view/web/season?season_id=${seasonId}`);
-            const res = await Widget.http.get(proxyUrl, { headers: { "Cookie": globals.bilibliCookie || "", "User-Agent": "Mozilla/5.0" } });
+            const res = await ForwardHttp.get(proxyUrl, { headers: { "Cookie": globals.bilibliCookie || "", "User-Agent": "Mozilla/5.0" } });
             const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
             if (data.code === 0 && data.result) {
               const ep = (data.result.episodes || data.result.main_section?.episodes || []).find((e) => e.id == epid);
@@ -12171,7 +12326,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
           }
           if (!success) {
             try {
-              const res = await Widget.http.get(`https://api.bilibili.com/pgc/web/season/section?season_id=${seasonId}`, { headers: { "User-Agent": "Mozilla/5.0", "Cookie": globals.bilibliCookie || "" } });
+              const res = await ForwardHttp.get(`https://api.bilibili.com/pgc/web/season/section?season_id=${seasonId}`, { headers: { "User-Agent": "Mozilla/5.0", "Cookie": globals.bilibliCookie || "" } });
               const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
               if (data.code === 0 && data.result?.main_section?.episodes) {
                 const ep = data.result.main_section.episodes.find((e) => e.id == epid);
@@ -12201,7 +12356,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
         const ssid = path2.slice(-1)[0].slice(2).split("?")[0];
         const ssInfoUrl = `${api_epid_cid}?season_id=${ssid}`;
         log("info", `\u83B7\u53D6\u756A\u5267\u4FE1\u606F: season_id=${ssid}`);
-        const res = await Widget.http.get(ssInfoUrl, {
+        const res = await ForwardHttp.get(ssInfoUrl, {
           headers: {
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -12341,7 +12496,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
     try {
       const urlObj = new URL(segment.url);
       const rawUrl = segment.url.split("#")[0];
-      const response = await Widget.http.get(rawUrl, {
+      const response = await ForwardHttp.get(rawUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
           "Cookie": globals.bilibliCookie
@@ -12451,7 +12606,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
       const qs = Object.keys(params).map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join("&");
       const target = `https://api.bilibili.com/x/web-interface/search/type?${qs}`;
       const url = globals.makeProxyUrl(target);
-      const res = await Widget.http.get(url, {
+      const res = await ForwardHttp.get(url, {
         headers: { "User-Agent": "Mozilla/5.0", "Cookie": globals.bilibliCookie || "", "X-From-Biliroaming": "1.0.0" },
         signal
       });
@@ -12522,7 +12677,7 @@ var _BilibiliSource = class _BilibiliSource extends BaseSource {
     if (typeof httpGetWithStreamCheck !== "function") return null;
     let trusted = false;
     let isNoResult = false;
-    const result = await Widget.http.getWithStreamCheck(url, {
+    const result = await ForwardHttp.getWithStreamCheck(url, {
       headers,
       sniffLimit: 8192,
       signal
@@ -12687,7 +12842,7 @@ var YoukuSource = class extends BaseSource {
       const encodedKeyword = encodeURIComponent(keyword);
       const encodedUA = encodeURIComponent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
       const searchUrl = `https://search.youku.com/api/search?keyword=${encodedKeyword}&userAgent=${encodedUA}&site=1&categories=0&ftype=0&ob=0&pg=1`;
-      const response = await Widget.http.get(searchUrl, {
+      const response = await ForwardHttp.get(searchUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
           "Accept": "application/json",
@@ -12755,7 +12910,7 @@ var YoukuSource = class extends BaseSource {
   }
   async _getEpisodesPage(showId, page, pageSize) {
     const url = `https://openapi.youku.com/v2/shows/videos.json?client_id=53e6cc67237fc59a&package=com.huawei.hwvplayer.youku&ext=show&show_id=${showId}&page=${page}&count=${pageSize}`;
-    const response = await Widget.http.get(url, {
+    const response = await ForwardHttp.get(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
       }
@@ -12903,7 +13058,7 @@ var YoukuSource = class extends BaseSource {
     const segments = [...segmentList];
     for (let i = 0; i < segments.length; i += concurrency) {
       const batch = segments.slice(i, i + concurrency).map(async (segment) => {
-        const response = await Widget.http.post(segment.url, buildQueryString({ data: segment.data }), {
+        const response = await ForwardHttp.post(segment.url, buildQueryString({ data: segment.data }), {
           headers: {
             "Cookie": `_m_h5_tk=${segment._m_h5_tk};_m_h5_tk_enc=${segment._m_h5_tk_enc};`,
             "Referer": "https://v.youku.com",
@@ -12965,7 +13120,7 @@ var YoukuSource = class extends BaseSource {
     let res;
     try {
       const videoInfoUrl = `${api_video_info}?client_id=53e6cc67237fc59a&video_id=${video_id}&package=com.huawei.hwvplayer.youku&ext=show`;
-      res = await Widget.http.get(videoInfoUrl, {
+      res = await ForwardHttp.get(videoInfoUrl, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36"
@@ -12984,7 +13139,7 @@ var YoukuSource = class extends BaseSource {
     try {
       const cnaUrl = "https://log.mmstat.com/eg.js";
       const tkEncUrl = "https://acs.youku.com/h5/mtop.com.youku.aplatform.weakget/1.0/?jsv=2.5.1&appKey=24679788";
-      const cnaRes = await Widget.http.get(cnaUrl, {
+      const cnaRes = await ForwardHttp.get(cnaUrl, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36"
@@ -12999,7 +13154,7 @@ var YoukuSource = class extends BaseSource {
       log("info", `cna: ${cna}`);
       let tkEncRes;
       while (!tkEncRes) {
-        tkEncRes = await Widget.http.get(tkEncUrl, {
+        tkEncRes = await ForwardHttp.get(tkEncUrl, {
           headers: {
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36"
@@ -13113,7 +13268,7 @@ var YoukuSource = class extends BaseSource {
   }
   async getEpisodeSegmentDanmu(segment) {
     log("info", "\u5F00\u59CB\u4ECE\u672C\u5730\u8BF7\u6C42\u4F18\u9177\u5206\u6BB5\u5F39\u5E55...", segment.url);
-    const response = await Widget.http.post(segment.url, buildQueryString({ data: segment.data }), {
+    const response = await ForwardHttp.post(segment.url, buildQueryString({ data: segment.data }), {
       headers: {
         "Cookie": `_m_h5_tk=${segment._m_h5_tk};_m_h5_tk_enc=${segment._m_h5_tk_enc};`,
         "Referer": "https://v.youku.com",
@@ -13201,7 +13356,7 @@ var DandanSource = class extends BaseSource {
       const tmdbAbortController = new AbortController();
       const originalSearchPromise = (async () => {
         try {
-          const resp = await Widget.http.get(`https://api.danmaku.weeblify.app/ddp/v1?path=/v2/search/anime?keyword=${keyword}`, {
+          const resp = await ForwardHttp.get(`https://api.danmaku.weeblify.app/ddp/v1?path=/v2/search/anime?keyword=${keyword}`, {
             headers: {
               "Content-Type": "application/json",
               "User-Agent": DandanUserAgent
@@ -13240,7 +13395,7 @@ var DandanSource = class extends BaseSource {
           }
           const { title: tmdbTitle, cnAlias } = tmdbResult2;
           log("info", `[Dandan] \u4F7F\u7528\u65E5\u8BED\u539F\u540D\u901A\u8FC7 episodes \u63A5\u53E3\u8FDB\u884C\u641C\u7D22: ${tmdbTitle}`);
-          const resp = await Widget.http.get(`https://api.danmaku.weeblify.app/ddp/v1?path=/v2/search/episodes?anime=${encodeURIComponent(tmdbTitle)}`, {
+          const resp = await ForwardHttp.get(`https://api.danmaku.weeblify.app/ddp/v1?path=/v2/search/episodes?anime=${encodeURIComponent(tmdbTitle)}`, {
             headers: {
               "Content-Type": "application/json",
               "User-Agent": DandanUserAgent
@@ -13303,7 +13458,7 @@ var DandanSource = class extends BaseSource {
   // 获取番剧详情和剧集列表
   async getEpisodes(id) {
     try {
-      const resp = await Widget.http.get(`https://api.danmaku.weeblify.app/ddp/v1?path=/v2/bangumi/${id}`, {
+      const resp = await ForwardHttp.get(`https://api.danmaku.weeblify.app/ddp/v1?path=/v2/bangumi/${id}`, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": DandanUserAgent
@@ -13552,7 +13707,7 @@ var DandanSource = class extends BaseSource {
 var CustomSource = class extends BaseSource {
   async search(keyword) {
     try {
-      const resp = await Widget.http.get(`${globals.customSourceApiUrl}/api/v2/search/anime?keyword=${keyword}`, {
+      const resp = await ForwardHttp.get(`${globals.customSourceApiUrl}/api/v2/search/anime?keyword=${keyword}`, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -13579,7 +13734,7 @@ var CustomSource = class extends BaseSource {
   }
   async getEpisodes(id) {
     try {
-      const resp = await Widget.http.get(`${globals.customSourceApiUrl}/api/v2/bangumi/${id}`, {
+      const resp = await ForwardHttp.get(`${globals.customSourceApiUrl}/api/v2/bangumi/${id}`, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -13652,7 +13807,7 @@ var CustomSource = class extends BaseSource {
   async getEpisodeDanmu(id) {
     let allDanmus = [];
     try {
-      const resp = await Widget.http.get(`${globals.customSourceApiUrl}/api/v2/comment/${id}`, {
+      const resp = await ForwardHttp.get(`${globals.customSourceApiUrl}/api/v2/comment/${id}`, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -14544,7 +14699,7 @@ var MiguSource = class extends BaseSource {
         "sec-ch-ua-platform": "Windows",
         "terminalId": "www"
       };
-      const response = await Widget.http.post(searchUrl, JSON.stringify(payload), {
+      const response = await ForwardHttp.post(searchUrl, JSON.stringify(payload), {
         headers
       });
       if (!response || !response.data) {
@@ -14591,7 +14746,7 @@ var MiguSource = class extends BaseSource {
   }
   async getDetail(id) {
     try {
-      const resp = await Widget.http.get(`https://v3-sc.miguvideo.com/program/v4/cont/content-info/${id}/1`, {
+      const resp = await ForwardHttp.get(`https://v3-sc.miguvideo.com/program/v4/cont/content-info/${id}/1`, {
         headers: {
           "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
         }
@@ -14614,7 +14769,7 @@ var MiguSource = class extends BaseSource {
   }
   async getEpisodes(id) {
     try {
-      const detailResp = await Widget.http.get(id, {
+      const detailResp = await ForwardHttp.get(id, {
         headers: {
           "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
         }
@@ -14758,7 +14913,7 @@ var MiguSource = class extends BaseSource {
   }
   async getEpisodeSegmentDanmu(segment) {
     try {
-      const response = await Widget.http.get(segment.url, {
+      const response = await ForwardHttp.get(segment.url, {
         headers: {
           "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
           "appCode": "miguvideo_default_h5"
@@ -14875,7 +15030,7 @@ var SohuSource = class extends BaseSource {
         "Origin": "https://so.tv.sohu.com"
       };
       const searchUrl = `https://m.so.tv.sohu.com/search/pc/keyword?${buildQueryString(params)}`;
-      const response = await Widget.http.get(searchUrl, { headers });
+      const response = await ForwardHttp.get(searchUrl, { headers });
       if (!response || !response.data) {
         log("info", "[Sohu] \u641C\u7D22\u54CD\u5E94\u4E3A\u7A7A");
         return [];
@@ -14909,7 +15064,7 @@ var SohuSource = class extends BaseSource {
       "Referer": "https://tv.sohu.com/"
     };
     const playlistUrl = `https://pl.hd.sohu.com/videolist?${buildQueryString(params)}`;
-    const response = await Widget.http.get(playlistUrl, { headers, timeout: 15e3 });
+    const response = await ForwardHttp.get(playlistUrl, { headers, timeout: 15e3 });
     if (!response || !response.data) {
       return null;
     }
@@ -15039,7 +15194,7 @@ var SohuSource = class extends BaseSource {
   async extractVidAndAid(id) {
     let vid2;
     let aid = "0";
-    const resp = await Widget.http.get(id, {
+    const resp = await ForwardHttp.get(id, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
       }
@@ -15101,7 +15256,7 @@ var SohuSource = class extends BaseSource {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
         "Referer": "https://tv.sohu.com/"
       };
-      const response = await Widget.http.get(segment.url, { headers, timeout: 1e4 });
+      const response = await ForwardHttp.get(segment.url, { headers, timeout: 1e4 });
       if (!response || !response.data) {
         log("error", `\u641C\u72D0\u89C6\u9891: \u5F39\u5E55\u6BB5\u54CD\u5E94\u4E3A\u7A7A (${segment.segment_start}-${segment.segment_end}s)`);
         return [];
@@ -15146,7 +15301,7 @@ var SohuSource = class extends BaseSource {
   }
   async getEpisodeSegmentDanmu(segment) {
     try {
-      const response = await Widget.http.get(segment.url, {
+      const response = await ForwardHttp.get(segment.url, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -15267,7 +15422,7 @@ var LeshiSource = class extends BaseSource {
         "Sec-Fetch-Site": "same-origin"
       };
       const searchUrl = `https://so.le.com/s?${buildQueryString(params)}`;
-      const response = await Widget.http.get(searchUrl, { headers, timeout: 15e3 });
+      const response = await ForwardHttp.get(searchUrl, { headers, timeout: 15e3 });
       if (!response || !response.data) {
         log("info", "[Leshi] \u641C\u7D22\u54CD\u5E94\u4E3A\u7A7A");
         return [];
@@ -15395,7 +15550,7 @@ var LeshiSource = class extends BaseSource {
       let htmlContent = null;
       for (const url of urlsToTry) {
         try {
-          const response = await Widget.http.get(url, { timeout: 1e4 });
+          const response = await ForwardHttp.get(url, { timeout: 1e4 });
           if (response && response.data && response.status === 200) {
             htmlContent = response.data;
             log("debug", `\u6210\u529F\u83B7\u53D6\u9875\u9762: ${url}`);
@@ -15643,7 +15798,7 @@ var LeshiSource = class extends BaseSource {
   }
   async getDanmuSegment(segment) {
     try {
-      const response = await Widget.http.get(segment.url, {
+      const response = await ForwardHttp.get(segment.url, {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -15697,7 +15852,7 @@ var LeshiSource = class extends BaseSource {
   }
   async getVideoDuration(videoId) {
     try {
-      const response = await Widget.http.get(`https://www.le.com/ptv/vplay/${videoId}.html`, { timeout: 1e4 });
+      const response = await ForwardHttp.get(`https://www.le.com/ptv/vplay/${videoId}.html`, { timeout: 1e4 });
       if (!response || !response.data) {
         log("warning", `\u4E50\u89C6\u7F51: \u83B7\u53D6\u89C6\u9891\u65F6\u957F\u5931\u8D25\uFF0C\u4F7F\u7528\u9ED8\u8BA4\u503C2400\u79D2`);
         return 2400;
@@ -15753,7 +15908,7 @@ var XiguaSource = class extends BaseSource {
   async search(keyword) {
     try {
       const searchUrl = `https://m.ixigua.com/s/${keyword}`;
-      const searchResp = await Widget.http.get(searchUrl, {
+      const searchResp = await ForwardHttp.get(searchUrl, {
         headers: {
           "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/17.5 Mobile/15A5370a Safari/602.1"
         }
@@ -15814,7 +15969,7 @@ var XiguaSource = class extends BaseSource {
     try {
       const itemId = id.split("/").pop();
       const detailUrl = `https://m.ixigua.com/video/${itemId}`;
-      const resp = await Widget.http.get(detailUrl, {
+      const resp = await ForwardHttp.get(detailUrl, {
         headers: {
           "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/17.5 Mobile/15A5370a Safari/602.1"
         }
@@ -15837,7 +15992,7 @@ var XiguaSource = class extends BaseSource {
   async getEpisodes(id) {
     try {
       const detailUrl = `https://m.ixigua.com/video/${id}`;
-      const detailResp = await Widget.http.get(detailUrl, {
+      const detailResp = await ForwardHttp.get(detailUrl, {
         headers: {
           "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/17.5 Mobile/15A5370a Safari/602.1"
         }
@@ -15992,7 +16147,7 @@ var XiguaSource = class extends BaseSource {
   }
   async getEpisodeSegmentDanmu(segment) {
     try {
-      const response = await Widget.http.get(segment.url, {
+      const response = await ForwardHttp.get(segment.url, {
         headers: {
           "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/17.5 Mobile/15A5370a Safari/602.1"
         },
@@ -16069,7 +16224,7 @@ var MaiduiduiSource = class extends BaseSource {
       const dataBody = {
         "keyWord": keyword
       };
-      const response = await Widget.http.post(searchUrl, JSON.stringify(this.getPlayload(urlSuffix, dataBody)), {
+      const response = await ForwardHttp.post(searchUrl, JSON.stringify(this.getPlayload(urlSuffix, dataBody)), {
         headers: this.headers
       });
       if (!response || !response.data) {
@@ -16114,7 +16269,7 @@ var MaiduiduiSource = class extends BaseSource {
         "hasIntroduction": 0,
         "vodUuid": vodUuid
       };
-      const response = await Widget.http.post(searchUrl, JSON.stringify(this.getPlayload(urlSuffix, dataBody)), {
+      const response = await ForwardHttp.post(searchUrl, JSON.stringify(this.getPlayload(urlSuffix, dataBody)), {
         headers: this.headers
       });
       if (!response || !response.data) {
@@ -16145,7 +16300,7 @@ var MaiduiduiSource = class extends BaseSource {
         "hasIntroduction": 0,
         "vodUuid": id
       };
-      const response = await Widget.http.post(searchUrl, JSON.stringify(this.getPlayload(urlSuffix, dataBody)), {
+      const response = await ForwardHttp.post(searchUrl, JSON.stringify(this.getPlayload(urlSuffix, dataBody)), {
         headers: this.headers
       });
       if (!response || !response.data) {
@@ -16290,7 +16445,7 @@ var MaiduiduiSource = class extends BaseSource {
         "times": segment.segment_start,
         "vodUuid": vodUuid
       };
-      const response = await Widget.http.post(searchUrl, JSON.stringify(this.getPlayload(urlSuffix, dataBody)), {
+      const response = await ForwardHttp.post(searchUrl, JSON.stringify(this.getPlayload(urlSuffix, dataBody)), {
         headers: this.headers,
         retries: 1
       });
@@ -16560,7 +16715,7 @@ var AiyifanSigningProvider = class {
     if (!forceRefresh && cacheValid) {
       return this.signingConfig;
     }
-    var response = await Widget.http.get(this.proxyUrlBuilder(this.configPageUrl), {
+    var response = await ForwardHttp.get(this.proxyUrlBuilder(this.configPageUrl), {
       headers: {
         "User-Agent": this.userAgent,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
@@ -16594,7 +16749,7 @@ var AiyifanSigningProvider = class {
     var signingConfig = await this.getSigningConfig(forceRefresh);
     var signedParams = this.buildSignedParams(baseParams, signingConfig);
     var requestUrl = updateQueryString(api, signedParams);
-    var response = await Widget.http.get(this.proxyUrlBuilder(requestUrl), { headers });
+    var response = await ForwardHttp.get(this.proxyUrlBuilder(requestUrl), { headers });
     var payload;
     try {
       payload = normalizeJsonPayload(response.data);
@@ -16668,7 +16823,7 @@ var AiyifanSource = class extends BaseSource {
     log("info", `[\u641C\u7D22] \u5173\u952E\u8BCD: ${keyword}, \u9875\u7801: ${page}`);
     try {
       const urlWithParams = updateQueryString(this.SEARCH_API, params);
-      const response = await Widget.http.get(globals.makeProxyUrl(urlWithParams), { headers });
+      const response = await ForwardHttp.get(globals.makeProxyUrl(urlWithParams), { headers });
       const data = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
       return data;
     } catch (error) {
@@ -17079,7 +17234,7 @@ var AnimekoSource = class extends BaseSource {
             // 2 代表动画类型
           }
         };
-        const resp = await Widget.http.post(searchUrl, JSON.stringify(payload), {
+        const resp = await ForwardHttp.post(searchUrl, JSON.stringify(payload), {
           headers: this.headers
         });
         if (!resp || !resp.data) {
@@ -17201,7 +17356,7 @@ var AnimekoSource = class extends BaseSource {
   async getSubjectRelations(subjectId) {
     try {
       const url = `https://api.bgm.tv/v0/subjects/${subjectId}/subjects`;
-      const resp = await Widget.http.get(url, { headers: this.headers });
+      const resp = await ForwardHttp.get(url, { headers: this.headers });
       if (!resp || !resp.data || !Array.isArray(resp.data)) return [];
       return resp.data.filter((item) => item.type === 2).map((item) => ({
         id: item.id,
@@ -17288,7 +17443,7 @@ var AnimekoSource = class extends BaseSource {
     try {
       while (true) {
         const url = `https://api.bgm.tv/v0/episodes?subject_id=${subjectId}&limit=${limit}&offset=${offset}`;
-        const resp = await Widget.http.get(url, {
+        const resp = await ForwardHttp.get(url, {
           headers: this.headers
         });
         if (!resp || !resp.data || !Array.isArray(resp.data.data)) {
@@ -17411,7 +17566,7 @@ var AnimekoSource = class extends BaseSource {
     const fetchDanmu = async (hostUrl) => {
       const targetUrl = `${hostUrl}/v1/danmaku/${realId}`;
       try {
-        const resp = await Widget.http.get(targetUrl, { headers: this.headers });
+        const resp = await ForwardHttp.get(targetUrl, { headers: this.headers });
         if (!resp || !resp.data) return null;
         const body = resp.data;
         if (body.danmakuList) return body.danmakuList;
@@ -17490,7 +17645,7 @@ var OtherSource = class extends BaseSource {
   }
   async getEpisodeDanmu(id) {
     try {
-      const response = await Widget.http.get(
+      const response = await ForwardHttp.get(
         `${globals.otherServer}/?url=${id}&ac=dm`,
         {
           headers: {
@@ -18874,11 +19029,11 @@ async function getCaches() {
   if (globals2.animes.length === 0) {
     log("info", "getCaches start.");
     const [kv_animes, kv_episodeIds, kv_episodeNum, kv_logBuffer, kv_lastSelectMap] = await Promise.all([
-      Widget.storage.get("animes"),
-      Widget.storage.get("episodeIds"),
-      Widget.storage.get("episodeNum"),
-      Widget.storage.get("logBuffer"),
-      Widget.storage.get("lastSelectMap")
+      ForwardStorage.get("animes"),
+      ForwardStorage.get("episodeIds"),
+      ForwardStorage.get("episodeNum"),
+      ForwardStorage.get("logBuffer"),
+      ForwardStorage.get("lastSelectMap")
     ]);
     globals2.animes = kv_animes ? typeof kv_animes === "string" ? JSON.parse(kv_animes) : kv_animes : globals2.animes;
     globals2.episodeIds = kv_episodeIds ? typeof kv_episodeIds === "string" ? JSON.parse(kv_episodeIds) : kv_episodeIds : globals2.episodeIds;
@@ -18895,11 +19050,11 @@ async function getCaches() {
 async function updateCaches() {
   log("info", "updateCaches start.");
   await Promise.all([
-    Widget.storage.set("animes", globals2.animes),
-    Widget.storage.set("episodeIds", globals2.episodeIds),
-    Widget.storage.set("episodeNum", globals2.episodeNum),
-    Widget.storage.set("logBuffer", globals2.logBuffer),
-    Widget.storage.set("lastSelectMap", JSON.stringify(Object.fromEntries(globals2.lastSelectMap)))
+    ForwardStorage.set("animes", globals2.animes),
+    ForwardStorage.set("episodeIds", globals2.episodeIds),
+    ForwardStorage.set("episodeNum", globals2.episodeNum),
+    ForwardStorage.set("logBuffer", globals2.logBuffer),
+    ForwardStorage.set("lastSelectMap", JSON.stringify(Object.fromEntries(globals2.lastSelectMap)))
   ]);
 }
 var PREFIX_URL = "http://localhost:9321";
@@ -19150,8 +19305,8 @@ async function getCommentsById(params) {
   if (commentId) {
     const storeKey = season && episode ? `${tmdbId}.${season}.${episode}` : `${tmdbId}`;
     const commentIdKey = `${storeKey}.${commentId}`;
-    const segmentList = Widget.storage.get(storeKey);
-    const lastCommentId = Widget.storage.get(commentIdKey);
+    const segmentList = ForwardStorage.get(storeKey);
+    const lastCommentId = ForwardStorage.get(commentIdKey);
     log("info", "storeKey:", storeKey);
     log("info", "commentIdKey:", commentIdKey);
     log("info", "commentId:", commentId);
@@ -19191,14 +19346,14 @@ async function getCommentsById(params) {
         likeSwitch
       });
     } else {
-      Widget.storage.remove(storeKey);
-      Widget.storage.remove(commentIdKey);
+      ForwardStorage.remove(storeKey);
+      ForwardStorage.remove(commentIdKey);
     }
     const response = await getComment(`${PREFIX_URL}/api/v2/comment/${commentId}`, "json", true);
     const resJson = await response.json();
     log("info", "segmentList:", resJson.comments.segmentList);
-    Widget.storage.set(storeKey, resJson.comments.segmentList);
-    Widget.storage.set(commentIdKey, commentId);
+    ForwardStorage.set(storeKey, resJson.comments.segmentList);
+    ForwardStorage.set(commentIdKey, commentId);
     console.log("segmentList", resJson.comments.segmentList);
     await updateCaches();
     return resJson.comments.segmentList;
@@ -19267,7 +19422,7 @@ async function getDanmuWithSegmentTime(params) {
     likeSwitch
   );
   const storeKey = season && episode ? `${tmdbId}.${season}.${episode}` : `${tmdbId}`;
-  const segmentList = Widget.storage.get(storeKey);
+  const segmentList = ForwardStorage.get(storeKey);
   if (segmentList) {
     const segment = segmentList.find((item) => {
       const start2 = Number(item.segment_start);
